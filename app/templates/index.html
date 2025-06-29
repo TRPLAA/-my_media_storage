@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Media Storage</title>
+    <style>
+        .preview-container { max-width: 300px; margin: 10px; }
+        video, audio { width: 100%; }
+    </style>
+</head>
+<body>
+    <input type="file" id="fileInput">
+    <button onclick="uploadFile()">Upload</button>
+    
+    <div id="previews"></div>
+
+    <script>
+        async function uploadFile() {
+            const file = document.getElementById('fileInput').files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+            loadPreviews();
+        }
+
+        function loadPreviews() {
+            fetch('/files')
+                .then(r => r.json())
+                .then(files => {
+                    const container = document.getElementById('previews');
+                    container.innerHTML = '';
+                    
+                    files.forEach(file => {
+                        const elem = file.type === 'video' ? 
+                            `<video controls src="/files/${file.name}"></video>` :
+                            file.type === 'audio' ?
+                            `<audio controls src="/files/${file.name}"></audio>` :
+                            `<img src="/files/${file.name}" alt="${file.name}">`;
+                        
+                        container.innerHTML += `
+                            <div class="preview-container">
+                                ${elem}
+                                <a href="/files/${file.name}" download>Download</a>
+                            </div>`;
+                    });
+                });
+        }
+        
+        // Загружаем превью при старте
+        window.onload = loadPreviews;
+    </script>
+</body>
+</html>
