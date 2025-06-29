@@ -3,54 +3,138 @@
 <head>
     <title>Media Storage</title>
     <style>
-        .preview-container { max-width: 300px; margin: 10px; }
-        video, audio { width: 100%; }
+        /* Добавим стили для уведомлений и списка файлов */
+        .notification {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            display: none;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .file-list { margin-top: 20px; }
+        .file-item {
+            padding: 10px;
+            border: 1px solid #ddd;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .preview-container { max-width: 300px; margin: 10px 0; }
+        .actions a { margin-left: 10px; }
     </style>
 </head>
 <body>
+    <h1>Media Storage</h1>
+    
+    <div id="notification" class="notification"></div>
+    
     <input type="file" id="fileInput">
     <button onclick="uploadFile()">Upload</button>
     
-    <div id="previews"></div>
+    <div class="file-list">
+        <h2>Uploaded Files</h2>
+        <div id="fileListContainer"></div>
+    </div>
 
     <script>
+        // Функция для показа уведомлений
+        function showNotification(message, isSuccess) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `notification ${isSuccess ? 'success' : 'error'}`;
+            notification.style.display = 'block';
+            
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        }
+
+        // Функция загрузки файла
         async function uploadFile() {
-            const file = document.getElementById('fileInput').files[0];
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput.files.length) {
+                showNotification('Please select a file', false);
+                return;
+            }
+
+            const file = fileInput.files[0];
             const formData = new FormData();
             formData.append('file', file);
             
-            await fetch('/upload', {
-                method: 'POST',
-                body: formData
-            });
-            loadPreviews();
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                if (response.ok) {
+                    showNotification(`File "${result.filename}" uploaded successfully!`, true);
+                    loadFileList(); // Обновляем список файлов
+                } else {
+                    showNotification(result.error || 'Upload failed', false);
+                }
+            } catch (error) {
+                showNotification('Network error: ' + error.message, false);
+            }
         }
 
-        function loadPreviews() {
-            fetch('/files')
-                .then(r => r.json())
-                .then(files => {
-                    const container = document.getElementById('previews');
-                    container.innerHTML = '';
+        // Функция загрузки списка файлов
+        async function loadFileList() {
+            try {
+                const response = await fetch('/list-files');
+                const files = await response.json();
+                
+                const container = document.getElementById('fileListContainer');
+                container.innerHTML = '';
+                
+                files.forEach(file => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item';
                     
-                    files.forEach(file => {
-                        const elem = file.type === 'video' ? 
-                            `<video controls src="/files/${file.name}"></video>` :
-                            file.type === 'audio' ?
-                            `<audio controls src="/files/${file.name}"></audio>` :
-                            `<img src="/files/${file.name}" alt="${file.name}">`;
-                        
-                        container.innerHTML += `
-                            <div class="preview-container">
-                                ${elem}
-                                <a href="/files/${file.name}" download>Download</a>
-                            </div>`;
-                    });
+                    // Отображение превью
+                    let preview = '';
+                    if (file.type === 'image') {
+                        preview = `<img src="/files/${file.name}" class="preview-container">`;
+                    } else if (file.type === 'video') {
+                        preview = `<video controls src="/files/${file.name}" class="preview-container"></video>`;
+                    } else if (file.type === 'audio') {
+                        preview = `<audio controls src="/files/${file.name}" class="preview-container"></audio>`;
+                    }
+                    
+                    fileItem.innerHTML = `
+                        <div>
+                            <div><strong>${file.name}</strong></div>
+                            <div>Size: ${formatFileSize(file.size)}</div>
+                            ${preview}
+                        </div>
+                        <div class="actions">
+                            <a href="/files/${file.name}" download>Download</a>
+                            <a href="/preview/${file.name}" target="_blank">Preview</a>
+                        </div>
+                    `;
+                    
+                    container.appendChild(fileItem);
                 });
+            } catch (error) {
+                console.error('Error loading files:', error);
+            }
         }
-        
-        // Загружаем превью при старте
-        window.onload = loadPreviews;
+
+        // Форматирование размера файла
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Загружаем список файлов при старте
+        window.addEventListener('DOMContentLoaded', loadFileList);
     </script>
 </body>
 </html>
